@@ -2,33 +2,52 @@ import subprocess
 import argparse
 import json
 import re
+import yaml
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command line arguments for Doris audit log.")
-    parser.add_argument("domain", type=str, help="The domain name of Doris cluster")
-    parser.add_argument("db", type=str, help="Database name")
-    parser.add_argument("tables", type=str, help="A comma-separated list of tables")
-    parser.add_argument("date", type=str, help="Partition date of audit log")
-    parser.add_argument("limit", type=int, help="Number of audit log records queried")
-    parser.add_argument("output_file", type=str, help="File to redirect output")
+    parser.add_argument("config_file", type=str, default="config.yaml", help="Path to the configuration file")
+    parser.add_argument("--domain", type=str, help="The domain name of Doris cluster")
+    parser.add_argument("--db", type=str, help="Database name")
+    parser.add_argument("--tables", type=str, help="A comma-separated list of tables")
+    parser.add_argument("--date", type=str, help="Partition date of audit log")
+    parser.add_argument("--limit", type=int, help="Number of audit log records queried")
+    parser.add_argument("--output_file", type=str, help="File to redirect output")
     args = parser.parse_args()
+    return args
 
-    domain = args.domain
-    db = args.db
-    date = args.date
-    tables = args.tables.split(',')
-    limit = args.limit
-    output_file = args.output_file
+def read_config_file(file_path):
+    with open(file_path, 'r') as f:
+        config = yaml.safe_load(f)
+    #print("config:{}".format(config))
+    return config
 
-    print("domain: {}".format(args.domain))
-    print("database: {}".format(args.db))
-    print("tables: {}".format(args.tables))
-    print("date: {}".format(args.date))
-    print("limit: {}".format(args.limit))
-    print("output_file: {}".format(args.output_file))
+def get_config():
+    args = parse_args()
+
+    config = read_config_file(args.config_file)
+
+    final_config = {
+        'domain': args.domain or config.get('domain'),
+        'db': args.db or config.get('db'),
+        'tables': args.tables or config.get('tables'),
+        'date': args.date or config.get('date'),
+        'limit': args.limit or config.get('limit'),
+        'output_file': args.output_file or config.get('output_file')
+    }
+
+    print("config_file: {}".format(args.config_file))
+    print("domain: {}".format(final_config['domain']))
+    print("database: {}".format(final_config['db']))
+    print("tables: {}".format(final_config['tables']))
+    print("date: {}".format(final_config['date']))
+    print("limit: {}".format(final_config['limit']))
+    print("output_file: {}".format(final_config['output_file']))
     print("------------------------------------------------------------")
 
-    return domain, db, tables, date, limit, output_file
+    final_config['tables'] = final_config['tables'].split(',')
+
+    return final_config
 
 def generate_sql_command(domain, db, tables, date, limit):
     tables_sql = ', '.join(["'{}'".format(table) for table in tables])
@@ -74,25 +93,26 @@ def process_json_output(json_str):
         data = json.loads(json_str)
         print("JSON is valid.")
         formatted_json_str = json.dumps(data, indent=4, ensure_ascii=False)
-        print(formatted_json_str)
+        #print(formatted_json_str)
         return formatted_json_str
     except ValueError as e:
         print("Failed to process JSON: ", e)
         return None
 
 def write_to_file(output_file, content):
+    print("------------------------------------------------------------")
+    print("Write result to output file: {}".format(output_file))
     with open(output_file, 'w') as f:
         f.write(content.encode('utf-8'))
 
 def main():
-    domain, db, tables, date, limit, output_file = parse_args()
-    sql = generate_sql_command(domain, db, tables, date, limit)
+    config = get_config()
+    sql = generate_sql_command(config['domain'], config['db'], config['tables'], config['date'], config['limit'])
     output = run_presto_command(sql)
     if output:
         formatted_output = process_json_output(output)
         if formatted_output:
-            write_to_file(output_file, formatted_output)
-
+            write_to_file(config['output_file'], formatted_output)
 
 if __name__ == "__main__":
     main()
