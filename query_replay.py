@@ -109,10 +109,13 @@ def main():
     config = get_config()
     sql = generate_sql_command(config['domain'], config['db'], config['tables'], config['date'], config['limit'])
     output = run_presto_command(sql)
-    if output:
+    if output and len(output) > 3:
         formatted_output = process_json_output(output)
         if formatted_output:
             write_to_file(config['output_file'], formatted_output)
+    else:
+        print("------------------------------------------------------------")
+        print("No queries found in audit log, please change filters...")
 
 if __name__ == "__main__":
     main()
